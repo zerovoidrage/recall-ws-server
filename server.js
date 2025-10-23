@@ -75,6 +75,10 @@ wss.on('connection', async (ws, req) => {
     try {
       const message = JSON.parse(data.toString());
       
+      // ЛОГИРУЕМ ВСЁ ЧТО ПРИХОДИТ
+      console.log(`\n📨 RAW MESSAGE RECEIVED:`);
+      console.log(JSON.stringify(message, null, 2));
+      
       // Извлекаем botId из сообщения если его ещё нет
       if (!botId && (message.bot_id || message.data?.bot?.id)) {
         botId = message.bot_id || message.data?.bot?.id;
