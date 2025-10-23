@@ -40,11 +40,11 @@ const connections = new Map();
 
 wss.on('connection', async (ws, req) => {
   const url = new URL(req.url, `ws://localhost:${PORT}`);
-  const botId = url.searchParams.get('botId');
+  const urlBotId = url.searchParams.get('botId');
   const token = url.searchParams.get('token');
 
   console.log(`\n🔌 New WebSocket connection attempt`);
-  console.log(`   Bot ID: ${botId}`);
+  console.log(`   Bot ID (from URL): ${urlBotId || 'not provided - will extract from messages'}`);
   console.log(`   Token: ${token ? '✓' : '✗'}`);
   console.log(`   IP: ${req.socket.remoteAddress}`);
 
@@ -55,14 +55,10 @@ wss.on('connection', async (ws, req) => {
     return;
   }
 
-  // Валидация botId
-  if (!botId) {
-    console.log(`❌ No botId provided, closing connection`);
-    ws.close(1008, 'botId required');
-    return;
-  }
-
-  console.log(`✅ Connection authenticated for bot: ${botId}`);
+  console.log(`✅ Connection authenticated`);
+  
+  // BotId будет извлечен из первого сообщения от Recall
+  let botId = urlBotId;
   
   // Сохраняем соединение
   connections.set(botId, {
@@ -75,37 +71,62 @@ wss.on('connection', async (ws, req) => {
   ws.on('message', async (data) => {
     try {
       const message = JSON.parse(data.toString());
+      
+      // Извлекаем botId из сообщения если его ещё нет
+      if (!botId && (message.bot_id || message.data?.bot?.id)) {
+        botId = message.bot_id || message.data?.bot?.id;
+        console.log(`📋 Bot ID extracted from message: ${botId}`);
+        
+        // Обновляем соединение с правильным botId
+        if (connections.has(urlBotId)) {
+          const conn = connections.get(urlBotId);
+          connections.delete(urlBotId);
+          connections.set(botId, { ...conn, botId });
+        } else {
+          connections.set(botId, {
+            ws,
+            botId,
+            connectedAt: new Date(),
+            messagesReceived: 0
+          });
+        }
+      }
+      
       const conn = connections.get(botId);
       if (conn) conn.messagesReceived++;
 
-      console.log(`📨 Message from bot ${botId}:`, {
+      console.log(`📨 Message from bot ${botId || 'unknown'}:`, {
         type: message.type || message.event,
         hasWords: !!(message.words || message.data?.words),
         wordsCount: (message.words || message.data?.words || []).length
       });
 
-      // Пересылаем данные в Next.js
-      try {
-        const response = await fetch(NEXTJS_WEBHOOK_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-WS-Bridge-Token': AUTH_TOKEN,
-            'X-Bot-Id': botId
-          },
-          body: JSON.stringify({
-            botId,
-            ...message
-          })
-        });
+      // Пересылаем данные в Next.js (только если есть botId)
+      if (botId) {
+        try {
+          const response = await fetch(NEXTJS_WEBHOOK_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-WS-Bridge-Token': AUTH_TOKEN,
+              'X-Bot-Id': botId
+            },
+            body: JSON.stringify({
+              botId,
+              ...message
+            })
+          });
 
-        if (!response.ok) {
-          console.error(`⚠️ Failed to forward to Next.js: ${response.status} ${response.statusText}`);
-        } else {
-          console.log(`✅ Forwarded to Next.js successfully`);
+          if (!response.ok) {
+            console.error(`⚠️ Failed to forward to Next.js: ${response.status} ${response.statusText}`);
+          } else {
+            console.log(`✅ Forwarded to Next.js successfully`);
+          }
+        } catch (error) {
+          console.error(`❌ Error forwarding to Next.js:`, error.message);
         }
-      } catch (error) {
-        console.error(`❌ Error forwarding to Next.js:`, error.message);
+      } else {
+        console.warn(`⚠️ Received message but botId not yet known, skipping forward`);
       }
 
     } catch (error) {
