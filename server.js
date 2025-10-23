@@ -51,6 +51,9 @@ wss.on('connection', async (ws, req) => {
   // Валидация токена
   if (AUTH_TOKEN && token !== AUTH_TOKEN) {
     console.log(`❌ Invalid token, closing connection`);
+    console.log(`   Expected: ${AUTH_TOKEN.substring(0, 20)}...`);
+    console.log(`   Received: ${token ? token.substring(0, 20) + '...' : 'none'}`);
+    console.log(`   Match: ${token === AUTH_TOKEN}`);
     ws.close(1008, 'Invalid token');
     return;
   }
