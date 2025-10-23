@@ -1,0 +1,19 @@
+{
+  "name": "recall-ws-server",
+  "version": "1.0.0",
+  "description": "WebSocket server for receiving real-time transcription data from Recall.ai",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": ["websocket", "recall", "transcription"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^8.16.0",
+    "dotenv": "^16.4.5"
+  }
+}
+
